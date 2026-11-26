@@ -438,28 +438,74 @@ document.addEventListener('keydown', (e) => {
   else return;
 });
 
-// ------------------------------------------------------------------ grid
+// ------------------------------------------------------------------ grid (페이지 단위)
+const PAGE = 60;
+let gridPage = 0;
+const pageCount = () => Math.max(1, Math.ceil(list.length / PAGE));
 function renderGrid() {
+  gridPage = Math.min(gridPage, pageCount() - 1);
   $('#gridTitle').textContent = `${filterLabel(filter)} · ${list.length}장`;
   const box = $('#gridList'); box.innerHTML = '';
   const frag = document.createDocumentFragment();
   const i0 = esc(NAMES[USERS[0]]), i1 = esc(NAMES[USERS[1]]);
-  list.forEach((n, i) => {
+  const from = gridPage * PAGE, to = Math.min(list.length, from + PAGE);
+  for (let i = from; i < to; i++) {
+    const n = list[i];
     const c = document.createElement('div'); c.className = 'cell' + (i === idx ? ' cur' : '');
     const sc = SCORES[n] || {};
     c.innerHTML = `<img loading="lazy" decoding="async" src="/img/thumb/${enc(n)}" alt="">` +
+      `<span class="no">${i + 1}</span>` +
       (FINALS[n] ? '<span class="h">♥</span>' : '') +
       `<div class="tag"><span class="a">${sc[USERS[0]] ? i0 + ' ' + sc[USERS[0]] : ''}</span>` +
       `<span class="b">${USERS[1] && sc[USERS[1]] ? i1 + ' ' + sc[USERS[1]] : ''}</span></div>`;
-    c.onclick = () => { idx = i; showScreen('viewer'); layoutAll(); renderAllSlides(); };
+    c.onclick = () => openAt(i);
     frag.appendChild(c);
-  });
+  }
   box.appendChild(frag);
+  // pager
+  const pc = pageCount(), sel = $('#pgSel');
+  if (sel.options.length !== pc) {
+    sel.innerHTML = '';
+    for (let p = 0; p < pc; p++) {
+      const o = document.createElement('option'); o.value = p;
+      o.textContent = `${p + 1} / ${pc} 페이지 (${p * PAGE + 1}~${Math.min(list.length, (p + 1) * PAGE)})`;
+      sel.appendChild(o);
+    }
+  }
+  sel.value = gridPage;
+  $('#pgPrev').disabled = gridPage === 0;
+  $('#pgNext').disabled = gridPage >= pc - 1;
+  $('#jumpIn').placeholder = list.length ? `번호(1~${list.length}) 또는 파일명(예: ${(list[0] || '').replace(/\.[^.]+$/, '').slice(-4)})` : '사진 없음';
 }
+function goPage(p) {
+  gridPage = Math.max(0, Math.min(pageCount() - 1, p));
+  renderGrid(); $('#gridList').scrollTop = 0;
+}
+function openAt(i) { idx = i; showScreen('viewer'); layoutAll(); renderAllSlides(); }
 function openGrid() {
+  gridPage = Math.floor(idx / PAGE);
   showScreen('grid'); renderGrid();
   const c = $('#gridList .cur'); if (c) c.scrollIntoView({ block: 'center' });
 }
+$('#pgPrev').onclick = () => goPage(gridPage - 1);
+$('#pgNext').onclick = () => goPage(gridPage + 1);
+$('#pgSel').onchange = (e) => goPage(+e.target.value);
+function jump() {
+  const v = $('#jumpIn').value.trim();
+  if (!v) return;
+  let i = -1;
+  if (/^[1-9]\d*$/.test(v) && +v <= list.length) i = +v - 1;               // 순서 번호 (0으로 시작하면 파일명)
+  else {                                                                     // 파일명 (예: 0614, JTG_0614)
+    const q = v.toLowerCase();
+    i = list.findIndex((n) => n.toLowerCase().replace(/\.[^.]+$/, '') === q);
+    if (i < 0) i = list.findIndex((n) => n.toLowerCase().includes(q));
+  }
+  if (i < 0) { $('#jumpIn').select(); toast(`"${v}" 사진이 지금 목록에 없어요`); return; }
+  $('#jumpIn').value = ''; $('#jumpIn').blur();
+  openAt(i);
+}
+$('#jumpGo').onclick = jump;
+$('#jumpIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') jump(); });
 $('#btnGrid').onclick = openGrid;
 $('#gridBack').onclick = () => { showScreen('viewer'); layoutAll(); renderAllSlides(); };
 $('#btnFilter').onclick = $('#gridFilter').onclick = openFilter;

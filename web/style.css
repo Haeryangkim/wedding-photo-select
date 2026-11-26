@@ -84,11 +84,11 @@ button.danger { color: #ff8a8a; }
 
 /* grid */
 #grid { background: var(--bg); }
-.gridlist { flex: 1; overflow-y: auto; display: grid; gap: 3px; padding: 3px 3px calc(3px + var(--safe-b));
+.gridlist { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 3px; padding: 3px;
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); align-content: start;
   -webkit-overflow-scrolling: touch; }
-.cell { position: relative; aspect-ratio: 1; background: #1b1b1f; overflow: hidden; cursor: pointer; }
-.cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cell { position: relative; height: 0; padding-top: 100%; background: #1b1b1f; overflow: hidden; cursor: pointer; }
+.cell img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .cell.cur { outline: 3px solid var(--accent); outline-offset: -3px; }
 .cell .tag span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%; }
 .cell .tag { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between;
@@ -114,3 +114,17 @@ button.danger { color: #ff8a8a; }
   .bottom { justify-content: center; }
   .rows { max-width: 520px; }
 }
+
+/* grid toolbar / pager */
+.gridbar { display: flex; gap: 8px; padding: 8px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.gridbar input { flex: 1; min-width: 0; padding: 9px 12px; font-size: 16px; border-radius: 10px;
+  border: 1px solid var(--line); background: #0f0f12; color: var(--fg); }
+.gridbar button { padding: 8px 14px; }
+.pager { display: flex; gap: 8px; align-items: center; padding: 8px 8px calc(8px + var(--safe-b));
+  background: var(--panel); border-top: 1px solid var(--line); }
+.pager button { flex: none; padding: 9px 14px; }
+.pager button:disabled { opacity: .35; }
+.pager select { flex: 1; min-width: 0; padding: 9px 8px; font-size: 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: #26262b; color: var(--fg); text-align: center; }
+.cell .no { position: absolute; top: 2px; left: 4px; font-size: 11px; color: #fff; text-shadow: 0 1px 3px #000;
+  background: rgba(0,0,0,.35); padding: 0 4px; border-radius: 4px; }
