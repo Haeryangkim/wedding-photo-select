@@ -137,9 +137,9 @@ function openPopup(url) {
   popup = window.open(url, 'tailscale', feat);
 }
 function waitingPopup() {
-  // 클릭 순간에 창을 열어둬야 팝업 차단에 안 걸림
-  popup = window.open('', 'tailscale', 'width=560,height=760,menubar=no,toolbar=no');
-  if (popup) popup.document.write('<meta charset="utf-8"><body style="font:16px sans-serif;background:#111;color:#eee;display:flex;align-items:center;justify-content:center;height:90vh">Tailscale 연결 중… 잠시만요</body>');
+  // 클릭 순간에 창을 열어둬야 팝업 차단에 안 걸림. 이 페이지는 스스로 상태를 따라
+  // 로그인/허용 화면으로 넘어가므로 관리 화면이 가려져 있어도 멈추지 않는다.
+  popup = window.open('/admin/ts', 'tailscale', 'width=560,height=760,menubar=no,toolbar=no');
 }
 let lastTSState = '';
 function renderTS(t) {
@@ -147,14 +147,13 @@ function renderTS(t) {
   $('#ok3').textContent = t.state === 'running' ? '✓ 공유 중' : '';
   // 상태가 바뀌면 열린 팝업을 알맞게 이동/닫기
   if (t.state !== lastTSState) {
-    if (t.state === 'needs-login' && t.authURL && popup && !popup.closed) openPopup(t.authURL);
     if (t.state === 'needs-funnel' && t.enableURL && popup && !popup.closed) openPopup(t.enableURL);
-    if ((t.state === 'running' || t.state === 'off') && popup && !popup.closed) { try { popup.close(); } catch {} }
+    if (t.state === 'off' && popup && !popup.closed) { try { popup.close(); } catch {} }
     lastTSState = t.state;
-  } else if (box.dataset.key === String(S.tsLogin) + t.state + (t.authURL || '') + (t.enableURL || '') + (t.publicURL || '') + (t.error || '')) {
+  } else if (box.dataset.key === String(S.tsLogin) + t.state + t.ready + (t.authURL || '') + (t.enableURL || '') + (t.publicURL || '') + (t.error || '')) {
     return; // 변화 없음
   }
-  box.dataset.key = String(S.tsLogin) + t.state + (t.authURL || '') + (t.enableURL || '') + (t.publicURL || '') + (t.error || '');
+  box.dataset.key = String(S.tsLogin) + t.state + t.ready + (t.authURL || '') + (t.enableURL || '') + (t.publicURL || '') + (t.error || '');
   let h = '';
   switch (t.state) {
     case 'off':
@@ -185,7 +184,15 @@ function renderTS(t) {
         <p class="desc"><span class="spin"></span>확인 중…</p>`;
       break;
     case 'running':
-      h = `<p class="desc" style="margin-top:0">아래 주소를 배우자에게 보내세요. 처음 접속은 인증서 준비로 몇 초 걸릴 수 있어요.</p>
+      if (!t.ready) {
+        h = `<p><span class="spin"></span><b>인터넷 주소를 준비하고 있어요</b> (처음 한 번, 보통 1~3분)</p>
+          <p class="desc">주소가 인터넷에 등록되고 보안 인증서가 발급되는 중이에요. 준비되면 여기에 주소가 나타나요.<br>
+          ※ 미리 접속해 보면 한동안 "찾을 수 없음" 이 남을 수 있어 준비될 때까지 숨겨 두었어요.</p>
+          <div class="row2"><button id="tsStop">공유 중지</button></div>`;
+        if (popup && !popup.closed) { try { popup.close(); } catch {} }
+        break;
+      }
+      h = `<p class="desc" style="margin-top:0">✓ 외부 접속 확인 완료! 아래 주소를 배우자에게 보내세요.</p>
         <div class="url"><a href="${esc(t.publicURL)}" target="_blank" rel="noopener">${esc(t.publicURL)}</a>
         <button id="tsCopy">복사</button></div>
         <div class="row2"><button id="tsMsg">공유 메시지 복사</button><button id="tsStop">공유 중지</button>
@@ -207,7 +214,7 @@ function renderTS(t) {
   on('tsEnable', () => openPopup(t.enableURL));
   on('tsStop', async () => { await post('ts-stop'); if (popup) try { popup.close(); } catch {} refresh(); });
   on('tsRetry', async () => { await post('ts-retry'); refresh(); });
-  on('tsLogout', async () => { if (confirm('이 컴퓨터의 Tailscale 로그인을 해제할까요? 다음에 다시 로그인해야 해요.')) { await post('ts-logout'); refresh(); } });
+  on('tsLogout', async () => { if (confirm('이 컴퓨터의 Tailscale 로그인을 해제할까요? 공개 주소가 꺼지고, 다음에 다시 로그인해야 해요.\n(Tailscale 기기 목록에는 꺼진 상태로 남아요. 완전히 지우려면 login.tailscale.com/admin/machines 에서 Remove)')) { await post('ts-logout'); refresh(); } });
   on('tsCopy', () => copy(t.publicURL, '#tsCopy'));
   on('tsMsg', () => copy(`💍 ${S.displayTitle} 사진 셀렉\n${t.publicURL}\n\n비밀번호는 따로 알려줄게요! 들어가서 사진마다 1~5점 매겨줘요 :)`, '#tsMsg'));
 }
@@ -236,4 +243,6 @@ $('#quit').onclick = async () => {
 };
 
 refresh();
-setInterval(() => { if (!document.hidden) refresh(); }, 1500);
+// 팝업 때문에 이 탭이 가려져도 계속 상태를 갱신 (로컬 요청이라 부담 없음)
+setInterval(refresh, 1500);
+document.addEventListener('visibilitychange', refresh);

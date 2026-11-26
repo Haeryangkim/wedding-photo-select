@@ -59,6 +59,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveStatic(w, r, strings.TrimPrefix(p, "/static/"))
 	case p == "/admin" && !h.public:
 		h.serveStatic(w, r, "admin.html")
+	case p == "/admin/ts" && !h.public: // Tailscale 로그인 팝업 (스스로 상태를 따라감)
+		h.serveStatic(w, r, "ts-popup.html")
 	case strings.HasPrefix(p, "/api/admin/") && !h.public:
 		h.admin(w, r, strings.TrimPrefix(p, "/api/admin/"))
 	case p == "/api/me":

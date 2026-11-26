@@ -41,6 +41,7 @@ type TSManager struct {
 	enableURL string
 	enableTxt string
 	publicURL string
+	ready     bool // 외부에서 실제로 접속되는지 확인됨 (DNS 전파 + 인증서 발급 완료)
 	account   string
 	errMsg    string
 }
@@ -51,6 +52,7 @@ type TSStatus struct {
 	EnableURL string `json:"enableURL,omitempty"`
 	EnableTxt string `json:"enableText,omitempty"`
 	PublicURL string `json:"publicURL,omitempty"`
+	Ready     bool   `json:"ready"`
 	Account   string `json:"account,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
@@ -60,7 +62,8 @@ func newTSManager(a *App) *TSManager { return &TSManager{app: a, state: "off"} }
 func (t *TSManager) Status() TSStatus {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return TSStatus{t.state, t.authURL, t.enableURL, t.enableTxt, t.publicURL, t.account, t.errMsg}
+	return TSStatus{State: t.state, AuthURL: t.authURL, EnableURL: t.enableURL, EnableTxt: t.enableTxt,
+		PublicURL: t.publicURL, Ready: t.ready, Account: t.account, Error: t.errMsg}
 }
 
 func (t *TSManager) set(fn func()) {
@@ -82,7 +85,7 @@ func (t *TSManager) Start() {
 	t.srv = &tsnet.Server{
 		Dir:      filepath.Join(t.app.dataDir, "tailscale"),
 		Hostname: cfg.Tailscale.Hostname,
-		Logf:     func(string, ...any) {}, // 내부 로그는 숨김
+		Logf:     tsDebugLogf(), // 내부 로그는 WS_DEBUG=1 일 때만
 		UserLogf: func(f string, a ...any) { log.Printf("[tailscale] "+f, a...) },
 	}
 	t.state, t.errMsg, t.authURL, t.enableURL, t.publicURL = "starting", "", "", "", ""
@@ -96,7 +99,7 @@ func (t *TSManager) Stop() {
 	t.mu.Lock()
 	srv, hs, cancel := t.srv, t.httpSrv, t.cancel
 	t.srv, t.httpSrv, t.ln, t.cancel = nil, nil, nil, nil
-	t.state, t.publicURL, t.authURL, t.enableURL = "off", "", "", ""
+	t.state, t.publicURL, t.authURL, t.enableURL, t.ready = "off", "", "", "", false
 	t.mu.Unlock()
 	if cancel != nil {
 		cancel()
@@ -217,21 +220,57 @@ loggedIn:
 		ErrorLog: log.New(discard{}, "", 0)}
 	t.set(func() {
 		t.ln, t.httpSrv = ln, hs
-		t.state, t.publicURL = "running", "https://"+domain
+		t.state, t.publicURL, t.ready = "running", "https://"+domain, false
 	})
 	log.Println("[tailscale] 외부 공유 주소:", "https://"+domain)
-	go warmCert(domain)
+	go t.waitReachable(ctx, domain)
 	if err := hs.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) && ctx.Err() == nil {
 		t.fail(err)
 	}
 }
 
-// warmCert makes the first visitor not wait for certificate issuance.
-func warmCert(domain string) {
-	time.Sleep(2 * time.Second)
-	c := &http.Client{Timeout: 60 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{}}}
-	if r, err := c.Get("https://" + domain + "/healthz"); err == nil {
-		r.Body.Close()
+// waitReachable checks the public URL from the outside until it answers, so the
+// admin page only shows the address once it really works. New Funnel names take
+// a minute or two to appear in DNS, and the first HTTPS request triggers
+// certificate issuance. Lookups go to public resolvers directly so that an early
+// "not found" answer is never cached by this computer's own DNS.
+func (t *TSManager) waitReachable(ctx context.Context, domain string) {
+	resolvers := []string{"1.1.1.1:53", "8.8.8.8:53", "9.9.9.9:53"}
+	start := time.Now()
+	for i := 0; ctx.Err() == nil; i++ {
+		srvAddr := resolvers[i%len(resolvers)]
+		r := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "udp", srvAddr)
+		}}
+		lctx, c := context.WithTimeout(ctx, 6*time.Second)
+		ips, err := r.LookupHost(lctx, domain)
+		c()
+		if err == nil && len(ips) > 0 {
+			ip := ips[0]
+			tr := &http.Transport{
+				TLSClientConfig: &tls.Config{ServerName: domain},
+				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+					_, port, _ := net.SplitHostPort(addr)
+					return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, net.JoinHostPort(ip, port))
+				},
+			}
+			cl := &http.Client{Timeout: 60 * time.Second, Transport: tr}
+			resp, err := cl.Get("https://" + domain + "/healthz")
+			tr.CloseIdleConnections()
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == 200 {
+					log.Printf("[tailscale] 외부 접속 확인 완료 (%s)", time.Since(start).Round(time.Second))
+					t.set(func() {
+						if t.publicURL == "https://"+domain {
+							t.ready = true
+						}
+					})
+					return
+				}
+			}
+		}
+		sleepCtx(ctx, 5*time.Second)
 	}
 }
 
@@ -266,4 +305,11 @@ func sanitizeHostname(s string) string {
 		out = "wedding-select"
 	}
 	return out
+}
+
+func tsDebugLogf() func(string, ...any) {
+	if os.Getenv("WS_DEBUG") != "" {
+		return func(f string, a ...any) { log.Printf("[ts-debug] "+f, a...) }
+	}
+	return func(string, ...any) {}
 }
