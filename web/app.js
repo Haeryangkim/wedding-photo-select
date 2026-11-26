@@ -439,10 +439,28 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ------------------------------------------------------------------ grid (페이지 단위)
-const PAGE = 60;
+// 한 페이지 = 화면에 딱 맞게 들어가는 만큼 (가로 칸 수 × 세로 줄 수), 화면 크기가 바뀌면 다시 계산
+let PAGE = 60;
 let gridPage = 0;
 const pageCount = () => Math.max(1, Math.ceil(list.length / PAGE));
+function fitGrid() {
+  const box = $('#gridList'), gap = 3;
+  const W = box.clientWidth - gap * 2, H = box.clientHeight - gap * 2;
+  if (W <= 0 || H <= 0) return false;
+  const minCell = W >= 900 ? 150 : 105;
+  const cols = Math.max(3, Math.floor((W + gap) / (minCell + gap)));
+  const size = (W - gap * (cols - 1)) / cols;
+  const rows = Math.max(2, Math.floor((H + gap) / (size + gap)));
+  box.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  box.style.gridAutoRows = Math.floor((H - gap * (rows - 1)) / rows) + 'px';   // 세로도 화면에 꽉 차게
+  box.classList.add('fit');
+  const first = gridPage * PAGE, changed = PAGE !== cols * rows;
+  PAGE = cols * rows;
+  if (changed) gridPage = Math.floor(first / PAGE);   // 보던 위치 유지
+  return changed;
+}
 function renderGrid() {
+  fitGrid();
   gridPage = Math.min(gridPage, pageCount() - 1);
   $('#gridTitle').textContent = `${filterLabel(filter)} · ${list.length}장`;
   const box = $('#gridList'); box.innerHTML = '';
@@ -464,7 +482,8 @@ function renderGrid() {
   box.appendChild(frag);
   // pager
   const pc = pageCount(), sel = $('#pgSel');
-  if (sel.options.length !== pc) {
+  if (sel.dataset.key !== pc + '/' + PAGE + '/' + list.length) {
+    sel.dataset.key = pc + '/' + PAGE + '/' + list.length;
     sel.innerHTML = '';
     for (let p = 0; p < pc; p++) {
       const o = document.createElement('option'); o.value = p;
@@ -483,10 +502,11 @@ function goPage(p) {
 }
 function openAt(i) { idx = i; showScreen('viewer'); layoutAll(); renderAllSlides(); }
 function openGrid() {
+  showScreen('grid'); fitGrid();
   gridPage = Math.floor(idx / PAGE);
-  showScreen('grid'); renderGrid();
-  const c = $('#gridList .cur'); if (c) c.scrollIntoView({ block: 'center' });
+  renderGrid();
 }
+window.addEventListener('resize', () => { if (!$('#grid').classList.contains('hidden') && fitGrid()) renderGrid(); });
 $('#pgPrev').onclick = () => goPage(gridPage - 1);
 $('#pgNext').onclick = () => goPage(gridPage + 1);
 $('#pgSel').onchange = (e) => goPage(+e.target.value);

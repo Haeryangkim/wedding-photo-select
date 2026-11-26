@@ -85,7 +85,7 @@ button.danger { color: #ff8a8a; }
 /* grid */
 #grid { background: var(--bg); }
 .gridlist { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 3px; padding: 3px;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); align-content: start;
+  grid-template-columns: repeat(3, 1fr); align-content: start;
   -webkit-overflow-scrolling: touch; }
 .cell { position: relative; height: 0; padding-top: 100%; background: #1b1b1f; overflow: hidden; cursor: pointer; }
 .cell img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -128,3 +128,4 @@ button.danger { color: #ff8a8a; }
   border: 1px solid var(--line); background: #26262b; color: var(--fg); text-align: center; }
 .cell .no { position: absolute; top: 2px; left: 4px; font-size: 11px; color: #fff; text-shadow: 0 1px 3px #000;
   background: rgba(0,0,0,.35); padding: 0 4px; border-radius: 4px; }
+.gridlist.fit .cell { height: auto; padding-top: 0; }
