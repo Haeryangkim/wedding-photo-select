@@ -22,7 +22,7 @@ curl -fL --progress-bar "https://github.com/$REPO/releases/latest/download/$ASSE
 chmod +x "$DIR/WeddingSelect.new"
 mv -f "$DIR/WeddingSelect.new" "$DIR/WeddingSelect"
 
-if [ "$OS" = "Darwin" ]; then
+if [ "$OS" = "Darwin" ] && [ -d "$HOME/Desktop" ]; then
   # 바탕화면에 더블클릭 실행 아이콘
   L="$HOME/Desktop/웨딩 사진 셀렉.command"
   printf '#!/bin/sh\ncd "%s" && exec ./WeddingSelect\n' "$DIR" > "$L"
