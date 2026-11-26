@@ -155,3 +155,9 @@ button.danger { color: #ff8a8a; }
 .wcresBtns button { flex: 1; }
 #lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.94); display: flex; align-items: center; justify-content: center; }
 #lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+.row .wl { flex: none; font-size: 11px; color: var(--muted); min-width: 0; white-space: nowrap; }
+.row .wl b { font-weight: 600; } .row .wl b.pk { color: var(--star); }
+.wcbulk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
+#wcBulk { display: flex; gap: 4px; flex-wrap: wrap; }
+#wcBulk button { padding: 6px 8px; font-size: 13px; color: var(--star); }

@@ -8,7 +8,7 @@ const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 let PHOTOS = [], BY = {}, SCORES = {}, FINALS = {};
 let list = [];          // filtered photo names (snapshot)
 let idx = 0;
-let filter = { basis: 'any', min: 0, finalOnly: false, unrated: false };
+let filter = { basis: 'any', min: 0, finalOnly: false, unrated: false, wcPick: '' };
 let draft = null;       // filter being edited in the sheet
 
 // ------------------------------------------------------------------ api
@@ -21,7 +21,12 @@ async function api(path, body) {
   if (!r.ok) throw new Error(j.error || r.statusText);
   return j;
 }
-function applyState(s) { SCORES = s.scores || {}; FINALS = s.finals || {}; }
+let WCD = {}, PICKS = {};   // 이상형 월드컵: 사람별 {stats:{photo:[승,패]}, picks:[...]}
+function applyState(s) {
+  SCORES = s.scores || {}; FINALS = s.finals || {}; WCD = s.wc || {};
+  PICKS = Object.fromEntries(Object.entries(WCD).map(([u, w]) => [u, new Set(w.picks || [])]));
+}
+const wl = (u, n) => ((WCD[u] || {}).stats || {})[n];
 
 // ------------------------------------------------------------------ boot / login
 async function boot() {
@@ -70,6 +75,7 @@ function passes(name, f) {
   const sc = SCORES[name] || {};
   if (f.finalOnly && !FINALS[name]) return false;
   if (f.unrated && sc[ME]) return false;
+  if (f.wcPick && !(PICKS[f.wcPick] && PICKS[f.wcPick].has(name))) return false;
   if (!f.min) return true;
   const a = sc[USERS[0]] || 0, b = sc[USERS[1]] || 0;
   switch (f.basis) {
@@ -79,7 +85,7 @@ function passes(name, f) {
     default: return (sc[f.basis] || 0) >= f.min;
   }
 }
-function filterActive(f) { return f.min > 0 || f.finalOnly || f.unrated; }
+function filterActive(f) { return f.min > 0 || f.finalOnly || f.unrated || !!f.wcPick; }
 function rebuildList(keepName) {
   list = PHOTOS.map((p) => p.name).filter((n) => passes(n, filter));
   let i = keepName ? list.indexOf(keepName) : -1;
@@ -99,6 +105,7 @@ function filterLabel(f) {
   if (f.min) parts.push(`${(BASIS().find((b) => b[0] === f.basis) || [0, f.basis])[1]} ${f.min}점↑`);
   if (f.finalOnly) parts.push('♥만');
   if (f.unrated) parts.push('안 본 것');
+  if (f.wcPick) parts.push(`🏆${NAMES[f.wcPick]} 픽`);
   return parts.join(' · ');
 }
 
@@ -117,6 +124,11 @@ function openFilter() {
     mn.appendChild(b);
   });
   $$('#filterSheet .tog').forEach((b) => { b.onclick = () => { draft[b.dataset.opt] = !draft[b.dataset.opt]; drawFilter(); }; });
+  const wp = $('#fWC'); wp.innerHTML = '';
+  [['', '상관없음'], ...USERS.map((u) => [u, `🏆 ${NAMES[u]} 픽 (${(PICKS[u] || new Set()).size})`])].forEach(([k, label]) => {
+    const b = document.createElement('button'); b.textContent = label; b.dataset.k = k;
+    b.onclick = () => { draft.wcPick = k; drawFilter(); }; wp.appendChild(b);
+  });
   drawFilter();
   $('#filterSheet').classList.remove('hidden');
 }
@@ -124,6 +136,7 @@ function drawFilter() {
   $$('#fBasis button').forEach((b) => b.classList.toggle('on', b.dataset.k === draft.basis));
   $$('#fMin button').forEach((b) => b.classList.toggle('on', +b.dataset.v === draft.min));
   $$('#filterSheet .tog').forEach((b) => b.classList.toggle('on', !!draft[b.dataset.opt]));
+  $$('#fWC button').forEach((b) => b.classList.toggle('on', b.dataset.k === (draft.wcPick || '')));
   $('#fMinLbl').textContent = draft.min ? `${draft.min}점 이상` : '';
   const n = PHOTOS.filter((p) => passes(p.name, draft)).length;
   $('#fPreview').textContent = `(${n}장)`;
@@ -134,14 +147,14 @@ $('#fApply').onclick = () => {
   if (!$('#grid').classList.contains('hidden')) renderGrid();
   toast(filterLabel(filter) + ` · ${list.length}장`);
 };
-$('#fReset').onclick = () => { draft = { basis: 'any', min: 0, finalOnly: false, unrated: false }; drawFilter(); };
+$('#fReset').onclick = () => { draft = { basis: 'any', min: 0, finalOnly: false, unrated: false, wcPick: '' }; drawFilter(); };
 
 // ------------------------------------------------------------------ score UI
 function starRow(user, mine) {
   const row = document.createElement('div');
   row.className = 'row ' + (mine ? 'me' : 'other');
   row.dataset.user = user;
-  row.innerHTML = `<span class="who">${esc(NAMES[user])}</span><div class="stars"></div>`;
+  row.innerHTML = `<span class="who">${esc(NAMES[user])}</span><div class="stars"></div><span class="wl"></span>`;
   const st = row.querySelector('.stars');
   for (let n = 1; n <= 5; n++) {
     const b = document.createElement('button'); b.textContent = '★'; b.dataset.n = n;
@@ -165,6 +178,8 @@ function updateUI() {
   $$('#scoreRows .row').forEach((row) => {
     const v = sc[row.dataset.user] || 0;
     row.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.n <= v));
+    const r = name && wl(row.dataset.user, name), picked = name && PICKS[row.dataset.user] && PICKS[row.dataset.user].has(name);
+    row.querySelector('.wl').innerHTML = r ? `<b class="${picked ? 'pk' : ''}">${picked ? '🏆' : ''}${r[0]}승 ${r[1]}패</b>` : '';
   });
   const fin = !!(name && FINALS[name]);
   $('#btnFinal').classList.toggle('on', fin);
@@ -554,7 +569,10 @@ $('#mDownload').onclick = () => {
 $('#mOrig').onclick = () => { download('/img/orig/' + enc(list[idx]) + '?dl=1'); closeSheets(); };
 $('#mAdmin').onclick = () => { location.href = '/admin'; };
 $('#mHelp').onclick = () => { closeSheets(); $('#helpSheet').classList.remove('hidden'); };
-$('#mLogout').onclick = async () => { await fetch('/api/logout', { method: 'POST', body: '{}' }); location.reload(); };
+$('#mLogout').onclick = async () => {
+  await fetch('/api/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  location.replace('/');
+};
 
 function closeSheets() { $$('.sheet').forEach((s) => s.classList.add('hidden')); }
 $$('.sheet').forEach((s) => s.addEventListener('click', (e) => { if (e.target === s || e.target.hasAttribute('data-close')) closeSheets(); }));
@@ -572,10 +590,15 @@ $('#mReset').onclick = () => {
   $('#rMine').textContent = `내 점수 모두 지우기 (${mine}개)`;
   $('#rFinals').textContent = `♥ 최종셀렉 비우기 (${nf}장)`;
   $('#rMine').disabled = !mine; $('#rFinals').disabled = !nf;
+  const nw = Object.keys(((WCD[ME] || {}).stats) || {}).length;
+  $('#rWC').textContent = `내 이상형 월드컵 기록 지우기 (${nw}장)`; $('#rWC').disabled = !nw && !((WCD[ME] || {}).picks || []).length;
   closeSheets(); $('#resetSheet').classList.remove('hidden');
 };
 $('#rMine').onclick = () => confirmSheet('내 점수를 모두 지울까요?', `${NAMES[ME]}님이 매긴 점수가 모두 지워져요. 상대방 점수와 최종셀렉은 그대로예요.`, '지우기', async () => {
   const r = await api('/api/reset', { what: 'my-scores' }); applyState(r); updateUI(); toast(`내 점수 ${r.removed}개를 지웠어요`);
+});
+$('#rWC').onclick = () => confirmSheet('내 이상형 월드컵 기록을 지울까요?', '사진별 승패 기록과 내 월드컵 픽 목록이 지워져요. 점수와 최종셀렉은 그대로예요.', '지우기', async () => {
+  const r = await api('/api/reset', { what: 'my-wc' }); applyState(r); updateUI(); toast('내 월드컵 기록을 지웠어요');
 });
 $('#rFinals').onclick = () => confirmSheet('최종셀렉을 비울까요?', '둘이 함께 쓰는 ♥ 최종셀렉 목록이 비워져요. 점수는 그대로예요.', '비우기', async () => {
   const r = await api('/api/reset', { what: 'finals' }); applyState(r); updateUI(); toast(`최종셀렉 ${r.removed}장을 비웠어요`);
@@ -591,6 +614,7 @@ function wcPools() {
   return {
     filter: { label: filterActive(filter) ? `지금 필터 (${list.length})` : `전체 (${list.length})`, list: list.slice() },
     finals: { label: `♥ 최종셀렉 (${Object.keys(FINALS).length})`, list: PHOTOS.map((p) => p.name).filter((n) => FINALS[n]) },
+    picks: { label: `🏆 내 픽 (${(PICKS[ME] || new Set()).size})`, list: PHOTOS.map((p) => p.name).filter((n) => PICKS[ME] && PICKS[ME].has(n)) },
     mine4: { label: `내가 4점↑ (${PHOTOS.filter((p) => (SCORES[p.name] || {})[ME] >= 4).length})`, list: PHOTOS.map((p) => p.name).filter((n) => (SCORES[n] || {})[ME] >= 4) },
   };
 }
@@ -661,8 +685,10 @@ function wcPick(side) {
   const panes = document.querySelectorAll('.wcpane');
   panes[side].classList.add('win'); panes[1 - side].classList.add('lose');
   setTimeout(() => {
-    WC.hist.push(JSON.stringify({ alive: WC.alive, next: WC.next, pairs: WC.pairs, round: WC.round, played: WC.played, roundSize: WC.roundSize, roundMatches: WC.roundMatches }));
-    const pair = WC.pairs.shift(); const winner = pair[side], loser = pair[1 - side];
+    const pair = WC.pairs[0]; const winner = pair[side], loser = pair[1 - side];
+    WC.hist.push(JSON.stringify({ alive: WC.alive, next: WC.next, pairs: WC.pairs, round: WC.round, played: WC.played, roundSize: WC.roundSize, roundMatches: WC.roundMatches, m: [winner, loser] }));
+    WC.pairs.shift();
+    api('/api/wc/match', { winner, loser }).then(() => bumpWL(winner, loser, 1)).catch((e) => toast('기록 저장 실패: ' + e.message));
     WC.next.push(winner); WC.alive = WC.alive.filter((x) => x !== loser); WC.played++;
     if (!WC.pairs.length) {
       WC.alive = WC.next.slice();
@@ -673,7 +699,14 @@ function wcPick(side) {
 }
 function wcUndo() {
   if (!WC || !WC.hist.length) return;
-  Object.assign(WC, JSON.parse(WC.hist.pop()), { done: false }); wcSave(); wcShow();
+  const h = JSON.parse(WC.hist.pop()); const m = h.m; delete h.m;
+  Object.assign(WC, h, { done: false, saved: false }); wcSave(); wcShow();
+  if (m) api('/api/wc/match', { winner: m[0], loser: m[1], undo: true }).then(() => bumpWL(m[0], m[1], -1)).catch(() => {});
+}
+function bumpWL(w, l, d) {   // 서버 응답을 기다리지 않고 화면용 기록만 갱신
+  const st = ((WCD[ME] = WCD[ME] || { stats: {}, picks: [] }).stats = WCD[ME].stats || {});
+  const a = st[w] || [0, 0], b = st[l] || [0, 0];
+  st[w] = [Math.max(0, a[0] + d), a[1]]; st[l] = [b[0], Math.max(0, b[1] + d)];
 }
 document.querySelectorAll('.wcpane').forEach((p) => {
   p.addEventListener('click', (e) => { if (e.target.closest('.wczoom')) return; wcPick(+p.dataset.side); });
@@ -688,6 +721,19 @@ function wcResult() {
   const order = Object.fromEntries(PHOTOS.map((p, i) => [p.name, i]));
   const win = WC.alive.slice().sort((x, y) => order[x] - order[y]);
   $('#wcResTitle').textContent = `최종 ${win.length}장이 남았어요!`;
+  if (!WC.saved) {   // 내 월드컵 픽으로 저장 (사람마다 따로, ♥ 최종셀렉과 별개)
+    WC.saved = true; wcSave();
+    api('/api/wc/picks', { photos: win }).then((r) => { applyState(r); toast(`🏆 ${NAMES[ME]} 픽 ${win.length}장으로 저장했어요`); }).catch((e) => toast('저장 실패: ' + e.message));
+  }
+  const bs = $('#wcBulk'); bs.innerHTML = '';
+  for (let k = 1; k <= 5; k++) {
+    const b = document.createElement('button'); b.textContent = '★'.repeat(k); b.title = k + '점';
+    b.onclick = async () => {
+      const r = await api('/api/scores-bulk', { photos: win, score: k, overwrite: $('#wcOver').checked });
+      applyState(r); updateUI(); toast(`${r.changed}장에 내 별점 ${k}점을 줬어요`);
+    };
+    bs.appendChild(b);
+  }
   const g = $('#wcResGrid'); g.innerHTML = '';
   win.forEach((n) => {
     const c = document.createElement('div'); c.className = 'cell';
@@ -705,6 +751,12 @@ function wcResult() {
     });
 }
 function wcFinish() { localStorage.removeItem(wcKey()); WC = null; showScreen('viewer'); layoutAll(); renderAllSlides(); }
+$('#wcClose').onclick = wcFinish;
+$('#wcShowPicks').onclick = () => {   // 내 픽만 필터로 보기
+  filter = { basis: 'any', min: 0, finalOnly: false, unrated: false, wcPick: ME };
+  localStorage.setItem('ws.filter.' + ME, JSON.stringify(filter));
+  localStorage.removeItem(wcKey()); WC = null; showScreen('viewer'); rebuildList(); layoutAll(); toast(`🏆 ${NAMES[ME]} 픽만 보는 중 · 필터에서 해제`);
+};
 function openLightbox(name) { const lb = $('#lightbox'); lb.querySelector('img').src = '/img/view/' + enc(name); lb.classList.remove('hidden'); }
 $('#lightbox').onclick = () => $('#lightbox').classList.add('hidden');
 document.addEventListener('keydown', (e) => {

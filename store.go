@@ -112,6 +112,90 @@ func (s *ConfigStore) saveLocked() error {
 type storeData struct {
 	Scores map[string]map[string]int `json:"scores"` // photo -> personID -> 1..5
 	Finals map[string]string         `json:"finals"` // photo -> personID who picked it
+	WC     map[string]*wcData        `json:"wc"`     // personID -> 이상형 월드컵 기록 (사람마다 따로)
+}
+
+type wcData struct {
+	Stats    map[string][2]int `json:"stats"`    // photo -> [승, 패] (누적)
+	Picks    []string          `json:"picks"`    // 마지막 월드컵에서 남긴 사진
+	PickedAt int64             `json:"pickedAt"` // unix seconds
+}
+
+func (s *Store) wcLocked(person string) *wcData {
+	w := s.d.WC[person]
+	if w == nil {
+		w = &wcData{Stats: map[string][2]int{}}
+		s.d.WC[person] = w
+	}
+	if w.Stats == nil {
+		w.Stats = map[string][2]int{}
+	}
+	return w
+}
+
+// RecordMatch adds (or with undo, removes) one World Cup match result for a person.
+func (s *Store) RecordMatch(person, winner, loser string, undo bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w := s.wcLocked(person)
+	d := 1
+	if undo {
+		d = -1
+	}
+	a, b := w.Stats[winner], w.Stats[loser]
+	a[0] = max(0, a[0]+d)
+	b[1] = max(0, b[1]+d)
+	w.Stats[winner], w.Stats[loser] = a, b
+	for _, k := range []string{winner, loser} {
+		if w.Stats[k] == [2]int{} {
+			delete(w.Stats, k)
+		}
+	}
+	return s.saveLocked()
+}
+
+// SetPicks stores the result of a person's latest World Cup.
+func (s *Store) SetPicks(person string, photos []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w := s.wcLocked(person)
+	w.Picks = append([]string(nil), photos...)
+	w.PickedAt = time.Now().Unix()
+	return s.saveLocked()
+}
+
+// ResetWC clears World Cup records of one person ("" = everyone).
+func (s *Store) ResetWC(person string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.backupLocked("reset-wc")
+	if person == "" {
+		s.d.WC = map[string]*wcData{}
+	} else {
+		delete(s.d.WC, person)
+	}
+	return s.saveLocked()
+}
+
+// BulkScore gives the same score to many photos (overwrite=false keeps scores already given).
+func (s *Store) BulkScore(person string, photos []string, score int, overwrite bool) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.backupLocked("bulk-score")
+	n := 0
+	for _, p := range photos {
+		m := s.d.Scores[p]
+		if m == nil {
+			m = map[string]int{}
+			s.d.Scores[p] = m
+		}
+		if _, has := m[person]; has && !overwrite {
+			continue
+		}
+		m[person] = score
+		n++
+	}
+	return n, s.saveLocked()
 }
 
 type Store struct {
@@ -137,6 +221,9 @@ func loadStore(path string) (*Store, error) {
 	if s.d.Finals == nil {
 		s.d.Finals = map[string]string{}
 	}
+	if s.d.WC == nil {
+		s.d.WC = map[string]*wcData{}
+	}
 	return s, nil
 }
 
@@ -153,6 +240,14 @@ func (s *Store) Snapshot() storeData {
 	}
 	for p, u := range s.d.Finals {
 		out.Finals[p] = u
+	}
+	out.WC = map[string]*wcData{}
+	for person, w := range s.d.WC {
+		c := &wcData{Stats: map[string][2]int{}, Picks: append([]string(nil), w.Picks...), PickedAt: w.PickedAt}
+		for k, v := range w.Stats {
+			c.Stats[k] = v
+		}
+		out.WC[person] = c
 	}
 	return out
 }
@@ -281,6 +376,9 @@ func (s *Store) RestoreLatest() (string, error) {
 	}
 	if d.Finals == nil {
 		d.Finals = map[string]string{}
+	}
+	if d.WC == nil {
+		d.WC = map[string]*wcData{}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

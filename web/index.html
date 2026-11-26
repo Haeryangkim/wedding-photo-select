@@ -84,11 +84,19 @@
     <div class="wcpane" data-side="1"><img alt=""><span class="wcsc"></span><button class="wczoom" title="크게 보기">⤢</button></div>
   </div>
   <div id="wcResult" class="hidden">
-    <div class="wcresHead"><h2 id="wcResTitle"></h2><p class="muted small">이 사진들로 최종셀렉을 만들 수 있어요.</p></div>
+    <div class="wcresHead"><h2 id="wcResTitle"></h2>
+      <p class="muted small">내 월드컵 픽으로 따로 저장돼요 (필터 → 🏆 내 픽). 원하면 별점을 한 번에 주거나 ♥ 최종셀렉에 넣을 수 있어요.</p>
+      <div class="wcbulk"><span class="small">이 사진들에 내 별점 한 번에:</span><div id="wcBulk"></div>
+        <label class="small muted"><input type="checkbox" id="wcOver"> 이미 준 점수도 바꾸기</label></div>
+    </div>
     <div id="wcResGrid" class="gridlist"></div>
     <div class="pager wcresBtns">
       <button id="wcAdd" class="primary">♥ 최종셀렉에 추가</button>
-      <button id="wcReplace">♥ 이것만 최종셀렉으로</button>
+      <button id="wcReplace">♥ 이것만 최종셀렉</button>
+    </div>
+    <div class="pager wcresBtns" style="border-top:0;padding-top:0">
+      <button id="wcShowPicks">🏆 내 픽만 넘겨보기</button>
+      <button id="wcClose">닫기</button>
     </div>
   </div>
 </section>
@@ -108,6 +116,8 @@
       <button data-opt="finalOnly" class="tog">♥ 최종셀렉만</button>
       <button data-opt="unrated" class="tog">내가 아직 안 본 것만</button>
     </div>
+    <label class="lab">이상형 월드컵 픽 (사람마다 따로 저장돼요)</label>
+    <div id="fWC" class="seg wrap"></div>
     <div class="actions">
       <button id="fReset">초기화</button>
       <button id="fApply" class="primary">적용 <span id="fPreview"></span></button>
@@ -137,6 +147,7 @@
     <p class="muted small">초기화하기 전 상태는 자동으로 백업돼요 (관리 화면에서 되돌리기 가능).<br>상대방 점수는 여기서 지울 수 없어요.</p>
     <button id="rMine" class="block">내 점수 모두 지우기</button>
     <button id="rFinals" class="block">♥ 최종셀렉 비우기</button>
+    <button id="rWC" class="block">내 이상형 월드컵 기록 지우기</button>
     <button class="block" data-close>취소</button>
   </div>
 </div>
@@ -181,7 +192,7 @@
       <li>같은 별을 한 번 더 누르면 점수 취소</li>
       <li><b>♥ 최종셀렉</b>은 둘이 함께 쓰는 목록 (스튜디오에 보낼 사진)</li>
       <li>⚲ 필터로 "신부 4점 이상", "둘 다 3점 이상" 같은 조건만 넘겨보기</li>
-      <li>🏆 <b>이상형 월드컵</b>: 두 장 중 하나를 계속 고르면 원하는 장수만 남겨줘요 (PC: ← → 로 선택, Backspace 되돌리기)</li>
+      <li>🏆 <b>이상형 월드컵</b>: 두 장 중 하나를 계속 고르면 원하는 장수만 남겨줘요. 사람마다 따로 저장되고, 별 옆에 사진별 <b>몇 승 몇 패</b>인지 보여요 (PC: ← → 로 선택, Backspace 되돌리기)</li>
       <li>PC: ← → 이동, 1~5 점수, 0 취소, F 최종셀렉, G 목록</li>
     </ul>
     <button class="block primary" data-close>닫기</button>

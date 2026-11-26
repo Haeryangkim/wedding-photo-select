@@ -240,10 +240,10 @@ func (h *handler) authed(w http.ResponseWriter, r *http.Request, user string) {
 			out[i] = map[string]any{"name": ph.Name, "w": ph.W, "h": ph.H}
 		}
 		s := a.store.Snapshot()
-		writeJSON(w, 200, map[string]any{"photos": out, "scores": s.Scores, "finals": s.Finals})
+		writeJSON(w, 200, map[string]any{"photos": out, "scores": s.Scores, "finals": s.Finals, "wc": s.WC})
 	case p == "/api/state":
 		s := a.store.Snapshot()
-		writeJSON(w, 200, map[string]any{"scores": s.Scores, "finals": s.Finals, "count": len(a.photos.List())})
+		writeJSON(w, 200, map[string]any{"scores": s.Scores, "finals": s.Finals, "wc": s.WC, "count": len(a.photos.List())})
 	case p == "/api/score" && r.Method == http.MethodPost:
 		var b struct {
 			Photo string
@@ -263,7 +263,7 @@ func (h *handler) authed(w http.ResponseWriter, r *http.Request, user string) {
 			return
 		}
 		s := a.store.Snapshot()
-		writeJSON(w, 200, map[string]any{"scores": s.Scores, "finals": s.Finals})
+		writeJSON(w, 200, map[string]any{"scores": s.Scores, "finals": s.Finals, "wc": s.WC})
 	case p == "/api/final" && r.Method == http.MethodPost:
 		var b struct {
 			Photo string
@@ -282,7 +282,7 @@ func (h *handler) authed(w http.ResponseWriter, r *http.Request, user string) {
 			return
 		}
 		s := a.store.Snapshot()
-		writeJSON(w, 200, map[string]any{"scores": s.Scores, "finals": s.Finals})
+		writeJSON(w, 200, map[string]any{"scores": s.Scores, "finals": s.Finals, "wc": s.WC})
 	case p == "/api/reset" && r.Method == http.MethodPost:
 		// 셀렉 화면에서 하는 초기화: 내 점수 또는 (공용) 최종셀렉만. 상대 점수는 지울 수 없다.
 		var b struct{ What string }
@@ -297,6 +297,8 @@ func (h *handler) authed(w http.ResponseWriter, r *http.Request, user string) {
 			n, err = a.store.ResetScores(user)
 		case "finals":
 			n, err = a.store.ClearFinals()
+		case "my-wc":
+			err = a.store.ResetWC(user)
 		default:
 			writeJSON(w, 400, map[string]any{"error": "잘못된 요청"})
 			return
@@ -306,7 +308,59 @@ func (h *handler) authed(w http.ResponseWriter, r *http.Request, user string) {
 			return
 		}
 		s := a.store.Snapshot()
-		writeJSON(w, 200, map[string]any{"removed": n, "scores": s.Scores, "finals": s.Finals})
+		writeJSON(w, 200, map[string]any{"removed": n, "scores": s.Scores, "finals": s.Finals, "wc": s.WC})
+	case p == "/api/wc/match" && r.Method == http.MethodPost:
+		var b struct {
+			Winner, Loser string
+			Undo          bool
+		}
+		if readJSON(r, &b) != nil {
+			writeJSON(w, 400, map[string]any{"error": "잘못된 요청"})
+			return
+		}
+		_, ok1 := a.photos.Get(b.Winner)
+		_, ok2 := a.photos.Get(b.Loser)
+		if !ok1 || !ok2 {
+			writeJSON(w, 404, map[string]any{"error": "사진 없음"})
+			return
+		}
+		if err := a.store.RecordMatch(user, b.Winner, b.Loser, b.Undo); err != nil {
+			writeJSON(w, 500, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true})
+	case (p == "/api/wc/picks" || p == "/api/scores-bulk") && r.Method == http.MethodPost:
+		var b struct {
+			Photos    []string
+			Score     int
+			Overwrite bool
+		}
+		if readJSON(r, &b) != nil || len(b.Photos) == 0 {
+			writeJSON(w, 400, map[string]any{"error": "잘못된 요청"})
+			return
+		}
+		for _, ph := range b.Photos {
+			if _, ok := a.photos.Get(ph); !ok {
+				writeJSON(w, 404, map[string]any{"error": "사진 없음: " + ph})
+				return
+			}
+		}
+		var err error
+		n := 0
+		if p == "/api/wc/picks" {
+			err = a.store.SetPicks(user, b.Photos)
+		} else if b.Score >= 1 && b.Score <= 5 {
+			n, err = a.store.BulkScore(user, b.Photos, b.Score, b.Overwrite) // 본인 점수만
+		} else {
+			writeJSON(w, 400, map[string]any{"error": "점수는 1~5"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"error": err.Error()})
+			return
+		}
+		s := a.store.Snapshot()
+		writeJSON(w, 200, map[string]any{"changed": n, "scores": s.Scores, "finals": s.Finals, "wc": s.WC})
 	case p == "/api/finals-bulk" && r.Method == http.MethodPost:
 		// 이상형 월드컵 결과 반영
 		var b struct {
@@ -328,7 +382,7 @@ func (h *handler) authed(w http.ResponseWriter, r *http.Request, user string) {
 			return
 		}
 		s := a.store.Snapshot()
-		writeJSON(w, 200, map[string]any{"scores": s.Scores, "finals": s.Finals})
+		writeJSON(w, 200, map[string]any{"scores": s.Scores, "finals": s.Finals, "wc": s.WC})
 	case p == "/api/download-finals":
 		h.downloadFinals(w, r)
 	case strings.HasPrefix(p, "/img/"):
@@ -502,7 +556,9 @@ func (h *handler) admin(w http.ResponseWriter, r *http.Request, action string) {
 		switch b.What {
 		case "all":
 			if _, err = a.store.ResetScores(""); err == nil {
-				_, err = a.store.ClearFinals()
+				if _, err = a.store.ClearFinals(); err == nil {
+					err = a.store.ResetWC("")
+				}
 			}
 		case "scores":
 			_, err = a.store.ResetScores("")
