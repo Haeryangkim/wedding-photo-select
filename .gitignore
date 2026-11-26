@@ -1,0 +1,6 @@
+/dist/
+/사진/
+/data/
+/WeddingSelect
+*.exe
+.DS_Store
