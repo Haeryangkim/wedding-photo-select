@@ -187,6 +187,109 @@ func (s *Store) SetFinal(photo, person string, on bool) error {
 	return s.saveLocked()
 }
 
+// ---- 초기화 / 일괄 변경 (변경 전에 항상 백업을 남긴다)
+
+// backupLocked writes the current data to data/backups/scores-<time>-<reason>.json (keeps the newest 30).
+func (s *Store) backupLocked(reason string) {
+	dir := filepath.Join(filepath.Dir(s.path), "backups")
+	os.MkdirAll(dir, 0o755)
+	b, _ := json.Marshal(s.d)
+	writeAtomic(filepath.Join(dir, "scores-"+time.Now().Format("20060102-150405.000")+"-"+reason+".json"), b, 0o644)
+	if ents, err := os.ReadDir(dir); err == nil && len(ents) > 30 {
+		for _, e := range ents[:len(ents)-30] {
+			os.Remove(filepath.Join(dir, e.Name()))
+		}
+	}
+}
+
+// ResetScores removes all scores of one person ("" = everyone).
+func (s *Store) ResetScores(person string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.backupLocked("reset-scores")
+	n := 0
+	for p, m := range s.d.Scores {
+		if person == "" {
+			n += len(m)
+			delete(s.d.Scores, p)
+			continue
+		}
+		if _, ok := m[person]; ok {
+			delete(m, person)
+			n++
+			if len(m) == 0 {
+				delete(s.d.Scores, p)
+			}
+		}
+	}
+	return n, s.saveLocked()
+}
+
+// ClearFinals empties the shared 최종셀렉 list.
+func (s *Store) ClearFinals() (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.backupLocked("clear-finals")
+	n := len(s.d.Finals)
+	s.d.Finals = map[string]string{}
+	return n, s.saveLocked()
+}
+
+// SetFinals adds photos to finals, or replaces finals with exactly these photos.
+func (s *Store) SetFinals(photos []string, person string, replace bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if replace {
+		s.backupLocked("replace-finals")
+		s.d.Finals = map[string]string{}
+	}
+	for _, p := range photos {
+		if _, ok := s.d.Finals[p]; !ok {
+			s.d.Finals[p] = person
+		}
+	}
+	return s.saveLocked()
+}
+
+// Backups lists backup files, newest first.
+func (s *Store) Backups() []string {
+	ents, _ := os.ReadDir(filepath.Join(filepath.Dir(s.path), "backups"))
+	var out []string
+	for i := len(ents) - 1; i >= 0; i-- {
+		out = append(out, ents[i].Name())
+	}
+	return out
+}
+
+// RestoreLatest restores the newest backup (the current state is backed up first, so it can be undone too).
+func (s *Store) RestoreLatest() (string, error) {
+	list := s.Backups()
+	if len(list) == 0 {
+		return "", errors.New("되돌릴 백업이 없어요")
+	}
+	name := list[0]
+	b, err := os.ReadFile(filepath.Join(filepath.Dir(s.path), "backups", name))
+	if err != nil {
+		return "", err
+	}
+	var d storeData
+	if err := json.Unmarshal(b, &d); err != nil {
+		return "", err
+	}
+	if d.Scores == nil {
+		d.Scores = map[string]map[string]int{}
+	}
+	if d.Finals == nil {
+		d.Finals = map[string]string{}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	os.Remove(filepath.Join(filepath.Dir(s.path), "backups", name))
+	s.backupLocked("before-restore")
+	s.d = d
+	return name, s.saveLocked()
+}
+
 var lastBackup time.Time
 
 func (s *Store) saveLocked() error {

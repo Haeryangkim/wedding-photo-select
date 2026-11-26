@@ -70,6 +70,31 @@
   </div>
 </section>
 
+<!-- world cup -->
+<section id="wc" class="screen hidden">
+  <header class="topbar">
+    <button id="wcQuit" class="icon" title="그만두기 (진행 상황은 저장돼요)">✕</button>
+    <div class="center"><div id="wcRound">16강</div><div id="wcSub" class="muted small"></div></div>
+    <button id="wcUndo" class="icon" title="되돌리기">↶</button>
+  </header>
+  <div class="wcbar"><i id="wcProg"></i></div>
+  <div id="wcStage">
+    <div class="wcpane" data-side="0"><img alt=""><span class="wcsc"></span><button class="wczoom" title="크게 보기">⤢</button></div>
+    <div class="wcvs">VS</div>
+    <div class="wcpane" data-side="1"><img alt=""><span class="wcsc"></span><button class="wczoom" title="크게 보기">⤢</button></div>
+  </div>
+  <div id="wcResult" class="hidden">
+    <div class="wcresHead"><h2 id="wcResTitle"></h2><p class="muted small">이 사진들로 최종셀렉을 만들 수 있어요.</p></div>
+    <div id="wcResGrid" class="gridlist"></div>
+    <div class="pager wcresBtns">
+      <button id="wcAdd" class="primary">♥ 최종셀렉에 추가</button>
+      <button id="wcReplace">♥ 이것만 최종셀렉으로</button>
+    </div>
+  </div>
+</section>
+
+<div id="lightbox" class="hidden"><img alt=""></div>
+
 <!-- filter sheet -->
 <div id="filterSheet" class="sheet hidden">
   <div class="sheetBody">
@@ -97,9 +122,51 @@
     <div id="stats" class="stats"></div>
     <button id="mDownload" class="primary block">⬇ 최종셀렉 원본 다운로드 (zip)</button>
     <button id="mOrig" class="block">⬇ 지금 사진 원본 받기</button>
+    <button id="mWC" class="block">🏆 이상형 월드컵으로 고르기</button>
+    <button id="mReset" class="block">↺ 초기화…</button>
     <button id="mHelp" class="block">사용법</button>
     <button id="mAdmin" class="block hidden">⚙ 관리 화면 (설정 · 사진 · 외부 공유)</button>
     <button id="mLogout" class="block danger">로그아웃</button>
+  </div>
+</div>
+
+<!-- reset -->
+<div id="resetSheet" class="sheet hidden">
+  <div class="sheetBody">
+    <h2>초기화</h2>
+    <p class="muted small">초기화하기 전 상태는 자동으로 백업돼요 (관리 화면에서 되돌리기 가능).<br>상대방 점수는 여기서 지울 수 없어요.</p>
+    <button id="rMine" class="block">내 점수 모두 지우기</button>
+    <button id="rFinals" class="block">♥ 최종셀렉 비우기</button>
+    <button class="block" data-close>취소</button>
+  </div>
+</div>
+
+<!-- generic confirm -->
+<div id="confirmSheet" class="sheet hidden">
+  <div class="sheetBody">
+    <h2 id="cfTitle"></h2>
+    <p id="cfText" class="muted"></p>
+    <div class="actions"><button data-close>취소</button><button id="cfOk" class="primary">확인</button></div>
+  </div>
+</div>
+
+<!-- world cup setup -->
+<div id="wcSheet" class="sheet hidden">
+  <div class="sheetBody">
+    <h2>🏆 이상형 월드컵</h2>
+    <p class="muted small">두 장씩 보여주면 더 마음에 드는 사진을 고르세요. 지는 사진은 빠지고, 마지막에 원하는 장수만 남아요.</p>
+    <div id="wcResume" class="hidden" style="margin:10px 0">
+      <button id="wcResumeBtn" class="block primary"></button>
+    </div>
+    <label class="lab">후보 사진</label>
+    <div id="wcPool" class="seg wrap"></div>
+    <label class="lab">최종 몇 장 남길까요?</label>
+    <div class="wcn">
+      <input id="wcN" type="number" inputmode="numeric" min="1" value="40">
+      <div id="wcQuick" class="seg"></div>
+    </div>
+    <p id="wcInfo" class="small muted"></p>
+    <div class="actions"><button data-close>취소</button><button id="wcStart" class="primary">시작</button></div>
   </div>
 </div>
 
@@ -114,6 +181,7 @@
       <li>같은 별을 한 번 더 누르면 점수 취소</li>
       <li><b>♥ 최종셀렉</b>은 둘이 함께 쓰는 목록 (스튜디오에 보낼 사진)</li>
       <li>⚲ 필터로 "신부 4점 이상", "둘 다 3점 이상" 같은 조건만 넘겨보기</li>
+      <li>🏆 <b>이상형 월드컵</b>: 두 장 중 하나를 계속 고르면 원하는 장수만 남겨줘요 (PC: ← → 로 선택, Backspace 되돌리기)</li>
       <li>PC: ← → 이동, 1~5 점수, 0 취소, F 최종셀렉, G 목록</li>
     </ul>
     <button class="block primary" data-close>닫기</button>

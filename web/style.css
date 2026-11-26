@@ -129,3 +129,29 @@ button.danger { color: #ff8a8a; }
 .cell .no { position: absolute; top: 2px; left: 4px; font-size: 11px; color: #fff; text-shadow: 0 1px 3px #000;
   background: rgba(0,0,0,.35); padding: 0 4px; border-radius: 4px; }
 .gridlist.fit .cell { height: auto; padding-top: 0; }
+
+/* world cup */
+.wcbar { height: 4px; background: #222; } .wcbar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+#wcStage { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 6px; position: relative; }
+@media (orientation: landscape) { #wcStage { flex-direction: row; } }
+.wcpane { flex: 1; min-height: 0; min-width: 0; position: relative; background: #151518; border-radius: 14px; overflow: hidden;
+  cursor: pointer; transition: transform .25s, opacity .25s, box-shadow .25s; border: 3px solid transparent; }
+.wcpane img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
+.wcpane.win { border-color: var(--accent); transform: scale(1.02); box-shadow: 0 0 30px rgba(255,93,122,.5); }
+.wcpane.lose { opacity: .15; transform: scale(.96); }
+.wcsc { position: absolute; left: 8px; bottom: 8px; font-size: 12px; background: rgba(0,0,0,.6); padding: 3px 8px; border-radius: 10px; }
+.wcsc:empty { display: none; }
+.wczoom { position: absolute; right: 8px; top: 8px; width: 38px; height: 38px; padding: 0; border-radius: 50%;
+  background: rgba(0,0,0,.55); border: none; font-size: 18px; }
+.wcvs { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; width: 52px; height: 52px;
+  border-radius: 50%; background: var(--accent); color: #fff; font-weight: 800; display: flex; align-items: center;
+  justify-content: center; box-shadow: 0 2px 12px rgba(0,0,0,.5); pointer-events: none; font-size: 16px; }
+.wcn { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.wcn input { width: 90px; padding: 10px; font-size: 18px; border-radius: 10px; border: 1px solid var(--line); background: #0f0f12; color: var(--fg); text-align: center; }
+.wcn .seg { margin: 0; flex: 1; }
+#wcResult { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#wcResult .gridlist { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+.wcresHead { padding: 12px 14px 4px; } .wcresHead h2 { margin: 0; font-size: 18px; }
+.wcresBtns button { flex: 1; }
+#lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.94); display: flex; align-items: center; justify-content: center; }
+#lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; }

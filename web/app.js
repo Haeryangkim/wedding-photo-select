@@ -559,4 +559,161 @@ $('#mLogout').onclick = async () => { await fetch('/api/logout', { method: 'POST
 function closeSheets() { $$('.sheet').forEach((s) => s.classList.add('hidden')); }
 $$('.sheet').forEach((s) => s.addEventListener('click', (e) => { if (e.target === s || e.target.hasAttribute('data-close')) closeSheets(); }));
 
+// ------------------------------------------------------------------ confirm sheet (no native dialogs)
+function confirmSheet(title, text, okLabel, onOk) {
+  $('#cfTitle').textContent = title; $('#cfText').textContent = text; $('#cfOk').textContent = okLabel || '확인';
+  $('#cfOk').onclick = async () => { closeSheets(); await onOk(); };
+  closeSheets(); $('#confirmSheet').classList.remove('hidden');
+}
+
+// ------------------------------------------------------------------ reset
+$('#mReset').onclick = () => {
+  const mine = Object.values(SCORES).filter((x) => x[ME]).length, nf = Object.keys(FINALS).length;
+  $('#rMine').textContent = `내 점수 모두 지우기 (${mine}개)`;
+  $('#rFinals').textContent = `♥ 최종셀렉 비우기 (${nf}장)`;
+  $('#rMine').disabled = !mine; $('#rFinals').disabled = !nf;
+  closeSheets(); $('#resetSheet').classList.remove('hidden');
+};
+$('#rMine').onclick = () => confirmSheet('내 점수를 모두 지울까요?', `${NAMES[ME]}님이 매긴 점수가 모두 지워져요. 상대방 점수와 최종셀렉은 그대로예요.`, '지우기', async () => {
+  const r = await api('/api/reset', { what: 'my-scores' }); applyState(r); updateUI(); toast(`내 점수 ${r.removed}개를 지웠어요`);
+});
+$('#rFinals').onclick = () => confirmSheet('최종셀렉을 비울까요?', '둘이 함께 쓰는 ♥ 최종셀렉 목록이 비워져요. 점수는 그대로예요.', '비우기', async () => {
+  const r = await api('/api/reset', { what: 'finals' }); applyState(r); updateUI(); toast(`최종셀렉 ${r.removed}장을 비웠어요`);
+});
+
+// ------------------------------------------------------------------ 이상형 월드컵
+// 매 경기에서 1장씩 빠지므로 (후보 수 - 남길 수) 번 고르면 끝. 라운드마다 남은 사진을 섞어 짝을 짓고,
+// 목표까지 필요한 만큼만 경기를 하며 나머지는 부전승으로 다음 라운드에 올라간다.
+let WC = null, wcPoolKey = 'filter', wcBusy = false;
+const wcKey = () => 'ws.wc.' + ME;
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+function wcPools() {
+  return {
+    filter: { label: filterActive(filter) ? `지금 필터 (${list.length})` : `전체 (${list.length})`, list: list.slice() },
+    finals: { label: `♥ 최종셀렉 (${Object.keys(FINALS).length})`, list: PHOTOS.map((p) => p.name).filter((n) => FINALS[n]) },
+    mine4: { label: `내가 4점↑ (${PHOTOS.filter((p) => (SCORES[p.name] || {})[ME] >= 4).length})`, list: PHOTOS.map((p) => p.name).filter((n) => (SCORES[n] || {})[ME] >= 4) },
+  };
+}
+function openWCSetup() {
+  const saved = JSON.parse(localStorage.getItem(wcKey()) || 'null');
+  $('#wcResume').classList.toggle('hidden', !saved || saved.done);
+  if (saved && !saved.done) $('#wcResumeBtn').textContent = `이어하기 · ${saved.pool.length}장 → ${saved.n}장 (${saved.played}/${saved.pool.length - saved.n} 진행)`;
+  const pools = wcPools(), box = $('#wcPool'); box.innerHTML = '';
+  if (!pools[wcPoolKey] || pools[wcPoolKey].list.length < 2) wcPoolKey = 'filter';
+  for (const [k, v] of Object.entries(pools)) {
+    const b = document.createElement('button'); b.textContent = v.label; b.disabled = v.list.length < 2;
+    b.classList.toggle('on', k === wcPoolKey); b.onclick = () => { wcPoolKey = k; openWCSetup(); };
+    box.appendChild(b);
+  }
+  const size = pools[wcPoolKey].list.length;
+  const q = $('#wcQuick'); q.innerHTML = '';
+  [10, 20, 40, 50].filter((x) => x < size).forEach((x) => {
+    const b = document.createElement('button'); b.textContent = x + '장'; b.onclick = () => { $('#wcN').value = x; wcInfo(); }; q.appendChild(b);
+  });
+  if (+$('#wcN').value >= size) $('#wcN').value = Math.max(1, Math.min(40, size - 1));
+  wcInfo();
+  closeSheets(); $('#wcSheet').classList.remove('hidden');
+}
+function wcInfo() {
+  const size = wcPools()[wcPoolKey].list.length, n = Math.floor(+$('#wcN').value);
+  const ok = n >= 1 && n < size;
+  $('#wcStart').disabled = !ok;
+  $('#wcInfo').textContent = ok ? `${size}장 중 ${n}장을 남겨요 · 총 ${size - n}번 고르면 끝 (한 번에 약 2초 → ${Math.max(1, Math.round((size - n) * 2 / 60))}분)`
+    : `1 ~ ${size - 1} 사이로 입력해 주세요`;
+}
+$('#wcN').addEventListener('input', wcInfo);
+$('#mWC').onclick = openWCSetup;
+$('#wcStart').onclick = () => {
+  const pool = wcPools()[wcPoolKey].list.slice(), n = Math.floor(+$('#wcN').value);
+  WC = { pool, n, alive: pool.slice(), next: [], pairs: [], round: 0, played: 0, hist: [], done: false };
+  wcNewRound(); closeSheets(); wcShow();
+};
+$('#wcResumeBtn').onclick = () => { WC = JSON.parse(localStorage.getItem(wcKey())); closeSheets(); wcShow(); };
+function wcNewRound() {
+  const R = WC.alive.length, m = Math.min(Math.floor(R / 2), R - WC.n);
+  shuffle(WC.alive);
+  WC.pairs = []; for (let i = 0; i < m; i++) WC.pairs.push([WC.alive[2 * i], WC.alive[2 * i + 1]]);
+  WC.next = WC.alive.slice(2 * m);            // 부전승
+  WC.roundSize = R; WC.roundMatches = m; WC.round++;
+}
+function wcSave() { WC.hist = WC.hist.slice(-30); localStorage.setItem(wcKey(), JSON.stringify(WC)); }
+function wcShow() {
+  showScreen('wc');
+  if (WC.done) return wcResult();
+  $('#wcResult').classList.add('hidden'); $('#wcStage').classList.remove('hidden');
+  const [a, b] = WC.pairs[0], R = WC.roundSize, m = WC.roundMatches, k = m - WC.pairs.length + 1;
+  $('#wcRound').textContent = (2 * m === R ? `${R}강` : `라운드 ${WC.round}`) + ` · ${k} / ${m}`;
+  $('#wcSub').textContent = `남은 ${WC.alive.length}장 → 목표 ${WC.n}장`;
+  $('#wcProg').style.width = (100 * WC.played / (WC.pool.length - WC.n)) + '%';
+  $('#wcUndo').disabled = !WC.hist.length;
+  document.querySelectorAll('.wcpane').forEach((p, i) => {
+    const name = i ? b : a; p.dataset.name = name; p.classList.remove('win', 'lose');
+    p.querySelector('img').src = '/img/view/' + enc(name);
+    const sc = SCORES[name] || {};
+    p.querySelector('.wcsc').textContent = USERS.filter((u) => sc[u]).map((u) => `${NAMES[u]} ${sc[u]}★`).join(' · ') + (FINALS[name] ? ' ♥' : '');
+  });
+  // 다음 대결 미리 불러오기
+  (WC.pairs[1] || []).forEach((n) => { new Image().src = '/img/view/' + enc(n); });
+}
+function wcPick(side) {
+  if (!WC || WC.done || wcBusy) return;
+  wcBusy = true;
+  const panes = document.querySelectorAll('.wcpane');
+  panes[side].classList.add('win'); panes[1 - side].classList.add('lose');
+  setTimeout(() => {
+    WC.hist.push(JSON.stringify({ alive: WC.alive, next: WC.next, pairs: WC.pairs, round: WC.round, played: WC.played, roundSize: WC.roundSize, roundMatches: WC.roundMatches }));
+    const pair = WC.pairs.shift(); const winner = pair[side], loser = pair[1 - side];
+    WC.next.push(winner); WC.alive = WC.alive.filter((x) => x !== loser); WC.played++;
+    if (!WC.pairs.length) {
+      WC.alive = WC.next.slice();
+      if (WC.alive.length <= WC.n) WC.done = true; else wcNewRound();
+    }
+    wcSave(); wcBusy = false; wcShow();
+  }, 280);
+}
+function wcUndo() {
+  if (!WC || !WC.hist.length) return;
+  Object.assign(WC, JSON.parse(WC.hist.pop()), { done: false }); wcSave(); wcShow();
+}
+document.querySelectorAll('.wcpane').forEach((p) => {
+  p.addEventListener('click', (e) => { if (e.target.closest('.wczoom')) return; wcPick(+p.dataset.side); });
+  p.querySelector('.wczoom').onclick = () => openLightbox(p.dataset.name);
+});
+$('#wcUndo').onclick = wcUndo;
+$('#wcQuit').onclick = () => { showScreen('viewer'); layoutAll(); renderAllSlides(); if (WC && !WC.done) toast('진행 상황을 저장했어요 · 메뉴에서 이어하기'); };
+function wcResult() {
+  $('#wcStage').classList.add('hidden'); $('#wcResult').classList.remove('hidden');
+  $('#wcRound').textContent = '🏆 결과'; $('#wcSub').textContent = `${WC.pool.length}장 → ${WC.alive.length}장`;
+  $('#wcProg').style.width = '100%'; $('#wcUndo').disabled = !WC.hist.length;
+  const order = Object.fromEntries(PHOTOS.map((p, i) => [p.name, i]));
+  const win = WC.alive.slice().sort((x, y) => order[x] - order[y]);
+  $('#wcResTitle').textContent = `최종 ${win.length}장이 남았어요!`;
+  const g = $('#wcResGrid'); g.innerHTML = '';
+  win.forEach((n) => {
+    const c = document.createElement('div'); c.className = 'cell';
+    c.innerHTML = `<img loading="lazy" src="/img/thumb/${enc(n)}" alt="">` + (FINALS[n] ? '<span class="h">♥</span>' : '');
+    c.onclick = () => openLightbox(n); g.appendChild(c);
+  });
+  $('#wcAdd').onclick = async () => {
+    const r = await api('/api/finals-bulk', { photos: win, replace: false }); applyState(r); updateUI();
+    toast(`최종셀렉에 추가했어요 (총 ${Object.keys(FINALS).length}장)`); wcFinish();
+  };
+  $('#wcReplace').onclick = () => confirmSheet(`최종셀렉을 이 ${win.length}장으로 바꿀까요?`,
+    `지금 최종셀렉 ${Object.keys(FINALS).length}장은 빠지고 이 ${win.length}장만 남아요. (바꾸기 전 상태는 백업돼요)`, '바꾸기', async () => {
+      const r = await api('/api/finals-bulk', { photos: win, replace: true }); applyState(r); updateUI();
+      toast(`최종셀렉을 ${win.length}장으로 바꿨어요`); wcFinish();
+    });
+}
+function wcFinish() { localStorage.removeItem(wcKey()); WC = null; showScreen('viewer'); layoutAll(); renderAllSlides(); }
+function openLightbox(name) { const lb = $('#lightbox'); lb.querySelector('img').src = '/img/view/' + enc(name); lb.classList.remove('hidden'); }
+$('#lightbox').onclick = () => $('#lightbox').classList.add('hidden');
+document.addEventListener('keydown', (e) => {
+  if ($('#wc').classList.contains('hidden') || e.target.tagName === 'INPUT') return;
+  if (!$('#lightbox').classList.contains('hidden')) { $('#lightbox').classList.add('hidden'); return; }
+  if (['ArrowLeft', 'ArrowUp', '1'].includes(e.key)) wcPick(0);
+  else if (['ArrowRight', 'ArrowDown', '2'].includes(e.key)) wcPick(1);
+  else if (e.key === 'Backspace' || e.key === 'z') wcUndo();
+  else if (e.key === 'Escape') $('#wcQuit').click();
+});
+
 boot().catch((e) => console.error(e));

@@ -127,6 +127,18 @@
   </section>
 
   <section class="sec">
+    <h2>↺ 셀렉 초기화</h2>
+    <p class="desc">두 사람의 점수와 ♥ 최종셀렉을 지워요. 사진은 지워지지 않아요. 초기화 직전 상태는 자동 백업되니
+      실수했으면 <b>되돌리기</b>를 누르세요. (각자 자기 점수만 지우는 건 셀렉 화면 메뉴 → 초기화)</p>
+    <div class="row2">
+      <button id="rsAll" class="danger">전체 초기화 (점수 + 최종셀렉)</button>
+      <button id="rsScores">점수만</button>
+      <button id="rsFinals">최종셀렉만</button>
+    </div>
+    <div class="row2"><button id="rsUndo">↶ 마지막 변경 되돌리기</button><span id="rsMsg" class="msg"></span></div>
+  </section>
+
+  <section class="sec">
     <h2>프로그램</h2>
     <p class="desc">이 컴퓨터가 꺼지거나 프로그램을 종료하면 외부에서도 접속이 안 돼요. 점수는 저장되니 다시 실행하면 그대로예요.</p>
     <div class="row2"><button id="quit" class="danger">프로그램 종료</button>

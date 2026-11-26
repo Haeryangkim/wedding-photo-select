@@ -283,6 +283,52 @@ func (h *handler) authed(w http.ResponseWriter, r *http.Request, user string) {
 		}
 		s := a.store.Snapshot()
 		writeJSON(w, 200, map[string]any{"scores": s.Scores, "finals": s.Finals})
+	case p == "/api/reset" && r.Method == http.MethodPost:
+		// 셀렉 화면에서 하는 초기화: 내 점수 또는 (공용) 최종셀렉만. 상대 점수는 지울 수 없다.
+		var b struct{ What string }
+		if readJSON(r, &b) != nil {
+			writeJSON(w, 400, map[string]any{"error": "잘못된 요청"})
+			return
+		}
+		var n int
+		var err error
+		switch b.What {
+		case "my-scores":
+			n, err = a.store.ResetScores(user)
+		case "finals":
+			n, err = a.store.ClearFinals()
+		default:
+			writeJSON(w, 400, map[string]any{"error": "잘못된 요청"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"error": err.Error()})
+			return
+		}
+		s := a.store.Snapshot()
+		writeJSON(w, 200, map[string]any{"removed": n, "scores": s.Scores, "finals": s.Finals})
+	case p == "/api/finals-bulk" && r.Method == http.MethodPost:
+		// 이상형 월드컵 결과 반영
+		var b struct {
+			Photos  []string
+			Replace bool
+		}
+		if readJSON(r, &b) != nil || len(b.Photos) == 0 {
+			writeJSON(w, 400, map[string]any{"error": "잘못된 요청"})
+			return
+		}
+		for _, ph := range b.Photos {
+			if _, ok := a.photos.Get(ph); !ok {
+				writeJSON(w, 404, map[string]any{"error": "사진 없음: " + ph})
+				return
+			}
+		}
+		if err := a.store.SetFinals(b.Photos, user, b.Replace); err != nil {
+			writeJSON(w, 500, map[string]any{"error": err.Error()})
+			return
+		}
+		s := a.store.Snapshot()
+		writeJSON(w, 200, map[string]any{"scores": s.Scores, "finals": s.Finals})
 	case p == "/api/download-finals":
 		h.downloadFinals(w, r)
 	case strings.HasPrefix(p, "/img/"):
@@ -405,6 +451,7 @@ func (h *handler) admin(w http.ResponseWriter, r *http.Request, action string) {
 			"photos": total, "cached": done, "photoDir": a.photoDir, "baseDir": a.baseDir, "localURL": a.localURL,
 			"finals": len(s.Finals), "scored": len(s.Scores),
 			"tailscale": a.ts.Status(), "tsLogin": a.ts.HasLogin(), "version": version,
+			"backups": len(a.store.Backups()),
 		})
 	case "config":
 		var b struct {
@@ -448,6 +495,35 @@ func (h *handler) admin(w http.ResponseWriter, r *http.Request, action string) {
 		writeJSON(w, 200, map[string]any{"ok": true})
 	case "upload":
 		h.upload(w, r)
+	case "reset":
+		var b struct{ What string }
+		readJSON(r, &b)
+		var err error
+		switch b.What {
+		case "all":
+			if _, err = a.store.ResetScores(""); err == nil {
+				_, err = a.store.ClearFinals()
+			}
+		case "scores":
+			_, err = a.store.ResetScores("")
+		case "finals":
+			_, err = a.store.ClearFinals()
+		default:
+			writeJSON(w, 400, map[string]any{"error": "잘못된 요청"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true})
+	case "restore":
+		name, err := a.store.RestoreLatest()
+		if err != nil {
+			writeJSON(w, 400, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"restored": name})
 	case "open-base":
 		if err := openFolder(a.baseDir); err != nil {
 			writeJSON(w, 500, map[string]any{"error": err.Error()})

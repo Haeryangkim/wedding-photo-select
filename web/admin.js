@@ -235,6 +235,20 @@ $('#saveHost').onclick = async () => {
   } catch (e) { alert(e.message); }
 };
 
+// ------------------------------------------------------------------ reset / restore
+const rsMsg = (t, ok) => { const m = $('#rsMsg'); m.className = 'msg ' + (ok ? 'good' : 'err'); m.textContent = t; };
+[['rsAll', 'all', '두 사람의 점수와 최종셀렉을 모두 지울까요?'], ['rsScores', 'scores', '두 사람의 점수를 모두 지울까요? (최종셀렉은 그대로)'],
+ ['rsFinals', 'finals', '최종셀렉을 비울까요? (점수는 그대로)']].forEach(([id, what, q]) => {
+  $('#' + id).onclick = async () => {
+    if (!confirm(q + '\n\n지우기 직전 상태는 백업되어 되돌릴 수 있어요.')) return;
+    try { await post('reset', { what }); rsMsg('초기화했어요 ✓', true); refresh(); } catch (e) { rsMsg(e.message); }
+  };
+});
+$('#rsUndo').onclick = async () => {
+  if (!confirm('가장 최근 백업으로 되돌릴까요?\n(지금 상태도 백업되니 다시 되돌릴 수 있어요)')) return;
+  try { await post('restore'); rsMsg('되돌렸어요 ✓', true); refresh(); } catch (e) { rsMsg(e.message); }
+};
+
 // ------------------------------------------------------------------ quit
 $('#quit').onclick = async () => {
   if (!confirm('프로그램을 종료할까요? 외부 공유도 같이 꺼져요. (점수는 저장돼 있어요)')) return;
