@@ -46,6 +46,8 @@ func main() {
 	port := flag.Int("port", 8765, "로컬 포트 (사용 중이면 다음 포트 사용)")
 	dir := flag.String("dir", "", "작업 폴더 (기본: 실행 파일이 있는 폴더)")
 	showVersion := flag.Bool("version", false, "버전 출력")
+	public := flag.Bool("public", false, "서버 배포용: HTTPS 리버스 프록시 뒤에서 셀렉 화면만 제공 (관리 화면 없음, 로그인 시도 제한)")
+	host := flag.String("host", "127.0.0.1", "listen 주소 (-public 과 함께 Docker 등에서 0.0.0.0)")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println(version)
@@ -61,7 +63,7 @@ func main() {
 		fatal(err)
 	}
 
-	ln, err := listenLocal(*port)
+	ln, err := listenLocal(*host, *port)
 	if err != nil {
 		fatal(err)
 	}
@@ -70,11 +72,17 @@ func main() {
 	banner(app)
 
 	go app.photos.Run()
-	if app.cfg.Get().Tailscale.Enabled {
+	if app.cfg.Get().Tailscale.Enabled && !*public {
 		app.ts.Start()
 	}
 
-	srv := &http.Server{Handler: app.localHandler(), ReadHeaderTimeout: 20 * time.Second}
+	handler := app.localHandler()
+	if *public {
+		handler = app.publicHandler()
+		*noBrowser = true
+		fmt.Println("  [public 모드] 셀렉 화면만 제공합니다. 설정은 data/config.json 을 직접 수정하세요.")
+	}
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 20 * time.Second}
 	go func() {
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			fatal(err)
@@ -147,10 +155,10 @@ func isTempDir(d string) bool {
 	return t != "" && len(d2) >= len(t) && d2[:len(t)] == t
 }
 
-func listenLocal(port int) (net.Listener, error) {
+func listenLocal(host string, port int) (net.Listener, error) {
 	var last error
 	for p := port; p < port+20; p++ {
-		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
+		ln, err := net.Listen("tcp", net.JoinHostPort(host, fmt.Sprint(p)))
 		if err == nil {
 			return ln, nil
 		}
