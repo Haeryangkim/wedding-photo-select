@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -108,19 +109,36 @@ func (t *TSManager) Stop() {
 	}
 }
 
-// Logout removes this device from the Tailscale account.
+// HasLogin reports whether a saved Tailscale login exists on disk.
+func (t *TSManager) HasLogin() bool {
+	_, err := os.Stat(filepath.Join(t.app.dataDir, "tailscale", "tailscaled.state"))
+	return err == nil
+}
+
+// Logout removes this device from the Tailscale account and deletes the saved login.
 func (t *TSManager) Logout() error {
 	t.mu.Lock()
 	srv := t.srv
 	t.mu.Unlock()
+	if srv == nil && t.HasLogin() { // 꺼져 있으면 잠깐 켜서 로그아웃
+		srv = &tsnet.Server{Dir: filepath.Join(t.app.dataDir, "tailscale"),
+			Hostname: t.app.cfg.Get().Tailscale.Hostname, Logf: func(string, ...any) {}}
+		if err := srv.Start(); err == nil {
+			defer srv.Close()
+		}
+	}
 	if srv != nil {
 		if lc, err := srv.LocalClient(); err == nil {
-			ctx, c := context.WithTimeout(context.Background(), 10*time.Second)
-			lc.Logout(ctx)
+			ctx, c := context.WithTimeout(context.Background(), 15*time.Second)
+			if err := lc.Logout(ctx); err != nil {
+				log.Println("[tailscale] 로그아웃 실패:", err)
+			}
 			c()
 		}
 	}
 	t.Stop()
+	os.RemoveAll(filepath.Join(t.app.dataDir, "tailscale"))
+	t.set(func() { t.account = "" })
 	return nil
 }
 

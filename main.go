@@ -168,6 +168,7 @@ func banner(a *App) {
 	fmt.Println("  사진 폴더 :", a.photoDir)
 	fmt.Println()
 	fmt.Println("  이 창을 닫으면 프로그램이 종료됩니다.")
+	fmt.Println("  삭제: 이 폴더를 통째로 휴지통에 →", a.baseDir)
 	fmt.Println("──────────────────────────────────────────────")
 }
 

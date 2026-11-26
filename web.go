@@ -400,9 +400,9 @@ func (h *handler) admin(w http.ResponseWriter, r *http.Request, action string) {
 		writeJSON(w, 200, map[string]any{
 			"title": c.Title, "displayTitle": c.DisplayTitle(), "people": c.People,
 			"configured": c.Configured(), "hostname": c.Tailscale.Hostname,
-			"photos": total, "cached": done, "photoDir": a.photoDir, "localURL": a.localURL,
+			"photos": total, "cached": done, "photoDir": a.photoDir, "baseDir": a.baseDir, "localURL": a.localURL,
 			"finals": len(s.Finals), "scored": len(s.Scores),
-			"tailscale": a.ts.Status(), "version": version,
+			"tailscale": a.ts.Status(), "tsLogin": a.ts.HasLogin(), "version": version,
 		})
 	case "config":
 		var b struct {
@@ -446,6 +446,12 @@ func (h *handler) admin(w http.ResponseWriter, r *http.Request, action string) {
 		writeJSON(w, 200, map[string]any{"ok": true})
 	case "upload":
 		h.upload(w, r)
+	case "open-base":
+		if err := openFolder(a.baseDir); err != nil {
+			writeJSON(w, 500, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true})
 	case "rescan":
 		n := a.photos.Rescan()
 		writeJSON(w, 200, map[string]any{"photos": n})

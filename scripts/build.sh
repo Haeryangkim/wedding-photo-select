@@ -18,10 +18,11 @@ b linux amd64 dist/WeddingSelect-linux-amd64
 b linux arm64 dist/WeddingSelect-linux-arm64
 
 # 맥 수동 다운로드용 zip (실행 권한 유지)
-mkdir -p "dist/tmp/WeddingSelect"
-cp dist/WeddingSelect-macos "dist/tmp/WeddingSelect/WeddingSelect"
-chmod +x "dist/tmp/WeddingSelect/WeddingSelect"
-(cd dist/tmp && zip -qry ../WeddingSelect-macos.zip WeddingSelect)
+APPDIR="dist/tmp/웨딩 사진 셀렉"
+mkdir -p "$APPDIR"
+cp dist/WeddingSelect-macos "$APPDIR/웨딩 사진 셀렉 시작"
+chmod +x "$APPDIR/웨딩 사진 셀렉 시작"
+(cd dist/tmp && zip -qry ../WeddingSelect-macos.zip "웨딩 사진 셀렉")
 rm -rf dist/tmp
 (cd dist && shasum -a 256 * > SHA256SUMS.txt)
 ls -la dist

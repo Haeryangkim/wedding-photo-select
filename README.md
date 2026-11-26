@@ -5,6 +5,7 @@
 
 - 내 컴퓨터에서 돌아가는 **셀프 호스팅** 방식이라 사진이 다른 서버에 올라가지 않아요
 - 프로그램 **하나만 실행**하면 끝 (설치할 것 없음, 코딩 몰라도 OK)
+- 모든 파일이 바탕화면의 **폴더 하나**에 — 다 쓰면 **폴더째 휴지통에 버리면 삭제 끝**
 - 무료 서비스 **Tailscale** 을 버튼 몇 번으로 연결해서 휴대폰/배우자도 인터넷 주소로 접속
 
 ## 기능
@@ -34,10 +35,10 @@
 curl -fsSL https://raw.githubusercontent.com/Haeryangkim/wedding-photo-select/main/install.sh | sh
 ```
 
-3. 잠시 후 브라우저에 **관리 화면**이 자동으로 열립니다.
-4. 다음부터는 바탕화면의 **`웨딩 사진 셀렉`** 아이콘을 더블클릭하면 됩니다.
+3. 바탕화면에 **`웨딩 사진 셀렉`** 폴더가 생기고, 잠시 후 브라우저에 **관리 화면**이 자동으로 열립니다.
+4. 다음부터는 그 폴더 안의 **`웨딩 사진 셀렉 시작`** 을 더블클릭하면 됩니다.
 
-> 직접 받고 싶다면: [Releases](https://github.com/Haeryangkim/wedding-photo-select/releases/latest) 에서 `WeddingSelect-macos.zip` 을 받아 압축을 풀고 `WeddingSelect` 를 더블클릭.
+> 직접 받고 싶다면: [Releases](https://github.com/Haeryangkim/wedding-photo-select/releases/latest) 에서 `WeddingSelect-macos.zip` 을 받아 압축을 풀고 `WeddingSelect` 를 더블클릭 (프로그램이 있는 폴더에 사진·설정이 저장돼요).
 > "확인되지 않은 개발자" 경고가 뜨면 **시스템 설정 → 개인정보 보호 및 보안 → 맨 아래 "그래도 열기"** 를 누르세요.
 
 ### 🪟 Windows
@@ -49,12 +50,25 @@ curl -fsSL https://raw.githubusercontent.com/Haeryangkim/wedding-photo-select/ma
 irm https://raw.githubusercontent.com/Haeryangkim/wedding-photo-select/main/install.ps1 | iex
 ```
 
-3. 잠시 후 브라우저에 **관리 화면**이 자동으로 열립니다.
-4. 다음부터는 바탕화면의 **`웨딩 사진 셀렉`** 아이콘을 더블클릭하면 됩니다.
+3. 바탕화면에 **`웨딩 사진 셀렉`** 폴더가 생기고, 잠시 후 브라우저에 **관리 화면**이 자동으로 열립니다.
+4. 다음부터는 그 폴더 안의 **`웨딩 사진 셀렉 시작`** 을 더블클릭하면 됩니다.
 
-> 직접 받고 싶다면: [Releases](https://github.com/Haeryangkim/wedding-photo-select/releases/latest) 에서 `WeddingSelect-windows.exe` 를 받아 원하는 폴더에 두고 더블클릭.
+> 직접 받고 싶다면: [Releases](https://github.com/Haeryangkim/wedding-photo-select/releases/latest) 에서 `WeddingSelect-windows.exe` 를 받아 새 폴더에 두고 더블클릭 (그 폴더에 사진·설정이 저장돼요).
 > "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행** 을 누르세요.
 > 방화벽 허용 창이 뜨면 "허용" 을 눌러주세요 (Tailscale 연결용, 취소해도 동작은 해요).
+
+### 폴더 구성
+
+```
+바탕화면/웨딩 사진 셀렉/
+├── 웨딩 사진 셀렉 시작      ← 더블클릭해서 실행 (Windows 는 .exe)
+├── 사진/                    ← 스튜디오 원본 사진
+└── data/                    ← 점수 · 설정 · 미리보기 · Tailscale 로그인
+```
+
+폴더는 다른 곳으로 옮겨도 그대로 동작해요.
+> ⚠️ 바탕화면이 **iCloud(데스크탑 동기화) / OneDrive** 와 동기화되고 있다면 사진이 클라우드에도 올라가요.
+> 원치 않으면 폴더를 홈 폴더 등 다른 곳으로 옮겨서 쓰세요. 설치 프로그램이 감지하면 알려줘요.
 
 ### 실행되면
 
@@ -93,10 +107,24 @@ irm https://raw.githubusercontent.com/Haeryangkim/wedding-photo-select/main/inst
 
 ---
 
+## 🗑 삭제하는 법
+
+모든 것이 **`웨딩 사진 셀렉` 폴더 하나**에 들어 있어서, 그 폴더만 지우면 컴퓨터에 아무것도 남지 않아요.
+
+1. 필요하면 먼저 **최종셀렉 원본 다운로드** (폴더를 지우면 사진 · 점수도 함께 지워져요)
+2. 외부 공유를 썼다면 관리 화면 3번에서 **Tailscale 로그아웃** (Tailscale 계정의 기기 목록에서도 빠져요)
+3. 관리 화면 맨 아래 **프로그램 종료** (또는 검은 창 닫기)
+4. 바탕화면의 **`웨딩 사진 셀렉`** 폴더를 휴지통에 버리기
+
+Tailscale 계정까지 없애고 싶다면 [Tailscale 설정](https://login.tailscale.com/admin/settings/general) 맨 아래에서 삭제할 수 있어요 (선택).
+관리 화면 맨 아래 **🗑 삭제하는 법** 에도 같은 안내가 있어요.
+
+---
+
 ## 자주 묻는 질문
 
 **사진이 어디에 저장되나요?**
-프로그램과 같은 폴더의 `사진/` 폴더입니다 (설치 스크립트를 썼다면 `내 홈 폴더/WeddingSelect/사진`).
+프로그램과 같은 폴더의 `사진/` 폴더입니다 (설치 스크립트를 썼다면 `바탕화면/웨딩 사진 셀렉/사진`).
 점수·설정은 `data/` 폴더에 있어요. 다른 서버로 올라가지 않습니다.
 
 **안전한가요?**
@@ -105,7 +133,7 @@ irm https://raw.githubusercontent.com/Haeryangkim/wedding-photo-select/main/inst
 - 그래도 숫자 4자리보다는 **6자리 이상**을 추천해요. 셀렉이 끝나면 "공유 중지" 를 눌러 주세요.
 
 **점수를 초기화하고 싶어요 / 다른 커플이 쓰려면?**
-프로그램을 끄고 `data/scores.json` 을 지우면 점수가 초기화돼요. 새로 시작하려면 `사진/` 과 `data/` 폴더를 통째로 지우세요.
+프로그램을 끄고 `data/scores.json` 을 지우면 점수가 초기화돼요. 새로 시작하려면 `사진/` 과 `data/` 폴더를 지우거나, 설치를 한 번 더 하면 돼요 (폴더를 지운 뒤 설치).
 
 **Tailscale 이 뭔가요?**
 내 컴퓨터를 안전하게 인터넷 주소로 연결해 주는 서비스예요. 개인 사용은 무료이고, 이 프로그램에 내장돼 있어서 따로 설치할 필요가 없어요.
@@ -122,6 +150,7 @@ Go (go.mod 의 버전) 필요. 외부 런타임 의존성 없음 (웹 UI 는 `we
 
 ```sh
 go run .                       # 현재 폴더에 사진/ data/ 생성, 127.0.0.1:8765
+# 빌드한 실행 파일은 터미널에서 어디서 실행하든 "실행 파일이 있는 폴더" 를 사용
 go run . -dir ~/my-wedding -port 9000 -no-browser
 scripts/build.sh               # dist/ 에 macOS(유니버설) · Windows · Linux 빌드 (macOS 에서 실행)
 ```

@@ -32,6 +32,7 @@ function render() {
     $('#ttl').value = S.title || '';
     $('#host').value = S.hostname; $('#hostPrev').textContent = S.hostname;
     $('#dir').textContent = S.photoDir;
+    $('#base').textContent = S.baseDir;
   }
   $('#ok1').textContent = S.configured ? '✓ 완료' : '';
   $('#ok2').textContent = S.photos ? `✓ ${S.photos}장` : '';
@@ -126,6 +127,7 @@ async function upload(files) {
 }
 function alertMsg(t) { $('#up').classList.remove('hidden'); $('#upMsg').textContent = t; }
 $('#openFolder').onclick = () => post('open-folder').catch((e) => alertMsg(e.message));
+$('#openBase').onclick = () => post('open-base').catch((e) => alert(e.message));
 $('#rescan').onclick = async () => { const r = await post('rescan'); alertMsg(`사진 ${r.photos}장을 찾았어요`); refresh(); };
 
 // ------------------------------------------------------------------ 3. tailscale
@@ -149,10 +151,10 @@ function renderTS(t) {
     if (t.state === 'needs-funnel' && t.enableURL && popup && !popup.closed) openPopup(t.enableURL);
     if ((t.state === 'running' || t.state === 'off') && popup && !popup.closed) { try { popup.close(); } catch {} }
     lastTSState = t.state;
-  } else if (box.dataset.key === t.state + (t.authURL || '') + (t.enableURL || '') + (t.publicURL || '') + (t.error || '')) {
+  } else if (box.dataset.key === String(S.tsLogin) + t.state + (t.authURL || '') + (t.enableURL || '') + (t.publicURL || '') + (t.error || '')) {
     return; // 변화 없음
   }
-  box.dataset.key = t.state + (t.authURL || '') + (t.enableURL || '') + (t.publicURL || '') + (t.error || '');
+  box.dataset.key = String(S.tsLogin) + t.state + (t.authURL || '') + (t.enableURL || '') + (t.publicURL || '') + (t.error || '');
   let h = '';
   switch (t.state) {
     case 'off':
@@ -160,7 +162,8 @@ function renderTS(t) {
           <li><b>외부 공유 시작</b>을 누르면 로그인 창이 떠요 (Google · Apple · Microsoft 계정으로 무료 가입/로그인)</li>
           <li>처음 한 번은 <b>Funnel 허용</b> 화면이 나올 수 있어요 → 창에서 허용(Enable) 누르기</li>
           <li><b>https://….ts.net</b> 주소가 나오면 복사해서 배우자에게 보내기</li></ol>
-        <button id="tsStart" class="primary">외부 공유 시작</button>`;
+        <div class="row2" style="margin-top:0"><button id="tsStart" class="primary">외부 공유 시작</button>
+        ${S.tsLogin ? '<button id="tsLogout" class="danger">Tailscale 로그아웃</button>' : ''}</div>`;
       break;
     case 'starting':
       h = '<p><span class="spin"></span>Tailscale에 연결하는 중…</p>';
